@@ -161,6 +161,10 @@ ul.general-stats-tab.closed {
   /* transition: right 250ms ease-in-out; */
 }
 
+ul.general-stats-tab:last-child {
+  margin-top: 10rem;
+}
+
 li.stats-tab-nav {
   margin-top: auto;
   background-color: var(--map-accent-col-dark);
@@ -226,14 +230,16 @@ a {
 
 .minimap.closed {
   transform: translateX(100%);
+  /* to enable smooth transition at the cost of performance we can get rid of the "display: none" tag */
+  display: none;
 }
 
 .settings-tab {
   margin: 0;
   padding: 0em 0.5em;
-  position: absolute;
+  position: fixed;
   right: 0px;
-  top: 30vh;
+  top: 25vh;
   z-index: 3;
   display: flex;
   flex-direction: column;
@@ -264,10 +270,11 @@ a {
 }
 
 .settings-tab:hover {
+  position: fixed;
   width: 17em;
-  height: 70vh;
+  height: 50vh;
   opacity: 0.85;
-  border-radius: 1em 0em 0em 0em;
+  border-radius: 1em 0em 0em 1em;
 }
 
 .settings-tab div {
@@ -332,4 +339,18 @@ a {
   flex-direction: row;
   justify-content: space-around;
   align-items: center;
+}
+
+.settings-tab li.settings-option.sub-option {
+  margin-top: 0em;
+  margin-bottom: 2em;
+  margin-left: 2em;
+  font-size: 0.5rem;
+}
+
+.settings-tab li.settings-option.sub-option label,
+.seetings-tab li.settings-option.sub-option option,
+.settings-tab li.settings-option.sub-option select {
+  font-size: 0.75rem;
+  margin-left: 2em;
 }

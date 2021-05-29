@@ -8,6 +8,7 @@ import { NavLink } from "react-router-dom";
 import { ImStatsDots } from "react-icons/im";
 // import { OrthographicView } from "@deck.gl/core";
 import DeckGL from "@deck.gl/react";
+import { HeatmapLayer } from "@deck.gl/aggregation-layers";
 import { ScatterplotLayer } from "@deck.gl/layers";
 import AUPopulationAtLocation from "./GeoFeature.json";
 import { RiSettings5Fill as SettingsIcon } from "react-icons/ri";
@@ -29,6 +30,10 @@ function Home() {
     })
   );
 
+  const [discrepancyMode, setDiscrepancyMode] = React.useState("all");
+
+  const [discrepancyShown, setDiscrepancyShown] = React.useState(false);
+
   const [showMinimap, setShowMinimap] = React.useState(true);
 
   const [dataDisplayMode, setDataDisplayMode] = React.useState("both");
@@ -38,6 +43,8 @@ function Home() {
   const totalPopulation = AUPopulationAtLocation.reduce(
     (total, current) => (total += current)
   );
+
+  const averagePopulation = totalPopulation / AUPopulationAtLocation.length;
 
   const interp = new FlyToInterpolator({ speed: 0.85 });
 
@@ -92,26 +99,41 @@ function Home() {
 
   const handleDisplaySelect = (e) => {
     setDataDisplayMode(e.target.value);
+    if (e.target.value === "diff") {
+      if (!discrepancyShown) {
+        setDiscrepancyShown(true);
+        setDiscrepancyMode("all");
+      }
+    } else {
+      if (discrepancyShown) {
+        setDiscrepancyShown(false);
+      }
+    }
+  };
+
+  const handleDiscrepancySelect = (e) => {
+    setDiscrepancyMode(e.target.value);
+    console.log(e.target.value);
   };
 
   const scatterplotForm = new ScatterplotLayer({
     id: "scatterplot-layer",
     data: hexagonLayerData,
     pickable: true,
-    opacity: 0.8,
-    stroked: true,
+    opacity: 0.1,
+    stroked: false,
     filled: true,
-    radiusScale: 200,
+    radiusScale: 1,
     radiusMinPixels: 3,
-    radiusMaxPixels: 10,
+    radiusMaxPixels: 5,
     lineWidthMinPixels: 1,
     getPosition: (d) => [parseFloat(d._long), parseFloat(d.lat)],
-    getRadius: (d) => d.population / totalPopulation,
+    // getRadius: (d) => d.population,
     getFillColor: (d) =>
       d.demand.food.meat +
         d.demand.food.carbs +
         d.demand.food.vegetables +
-        d.demand.food.fruits >
+        d.demand.food.fruits >=
       d.supply.food.meat +
         d.supply.food.carbs +
         d.supply.food.vegetables +
@@ -125,6 +147,32 @@ function Home() {
     },
     // d.object.points ? setChosenArea(d.object.points[0].source) : null,
   });
+
+  const populationHeatmap = new HeatmapLayer({
+    id: "population-heatmap",
+    data: hexagonLayerData,
+    radiusPixels: 30,
+    getPosition: (d) => [parseFloat(d._long), parseFloat(d.lat)],
+    getWeight: (d) => d.population,
+    aggregation: "SUM",
+    colorRange: [
+      [240, 249, 232],
+      [186, 228, 188],
+      [123, 204, 196],
+      [67, 162, 202],
+      [8, 104, 172],
+    ],
+    // colorRange: [
+    //   [247, 247, 247],
+    //   [204, 204, 204],
+    //   [150, 150, 150],
+    //   [99, 99, 99],
+    //   [37, 37, 37],
+    // ],
+  });
+
+  const layers = [populationHeatmap, scatterplotForm];
+
   return (
     <>
       {/* we do this instead of the && syntax to enable transitions  */}
@@ -181,6 +229,20 @@ function Home() {
               <option value="demand">Demand</option>
             </select>
           </li>
+          {discrepancyShown ? (
+            <li className="settings-option sub-option">
+              <label>in</label>
+              <select onChange={handleDiscrepancySelect}>
+                <option value="all">Supply + Demand</option>
+                <option value="meat">Meat</option>
+                <option value="carbs">Carbs</option>
+                <option value="vegetables">Vegetables</option>
+                <option value="fruits">Fruits</option>
+              </select>
+            </li>
+          ) : (
+            <></>
+          )}
           <li className="settings-option">
             <label>Minimap </label>
             <select onChange={handleMinimapSelect}>
@@ -206,20 +268,21 @@ function Home() {
           viewState={viewState}
           onViewStateChange={handleViewStateChange}
           displayMode={dataDisplayMode}
+          discrepancyMode={discrepancyMode}
         />
         <div className={showMinimap ? "minimap" : "minimap closed"}>
           <ReactMap
             {...topdownView}
             mapboxApiAccessToken={process.env.REACT_APP_MAP_TOKEN}
-            width="15vw"
-            height="15vw"
+            width="20vh"
+            height="20vh"
             showCompass={false}
             showZoom={false}
             captureDrag={false}
           >
             <DeckGL
               viewState={topdownView}
-              layers={scatterplotForm}
+              layers={layers}
               getTooltip={(d) =>
                 d.object && {
                   html: `<h2>${d.object.suburb}</h2>`,

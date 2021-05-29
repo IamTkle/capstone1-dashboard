@@ -3,7 +3,8 @@ import React from "react";
 import ReactMap from "react-map-gl";
 import DeckGL from "@deck.gl/react";
 import { HexagonLayer } from "@deck.gl/aggregation-layers";
-import { GeoJsonLayer } from "@deck.gl/layers";
+import { GeoJsonLayer, ScatterplotLayer } from "@deck.gl/layers";
+
 // import AUPopulationAtLocation from "../au-cities-population-location.json";
 import AUPopulationAtLocation from "../GeoFeature.json";
 import FarmlandInfo from "../Farmland.json";
@@ -18,6 +19,7 @@ const Map = ({
   areaOnClick,
   style,
   displayMode,
+  discrepancyMode,
 }) => {
   const tooltip = React.useRef();
 
@@ -28,14 +30,15 @@ const Map = ({
   // console.log(geoJSONLayerData);
 
   // hexagon materials
-  const mats = {
-    ambient: 0.3,
-    diffuse: 0.7,
-    shininess: 100,
-    // specularColor: [100, 30, 30],
-
-    specularColor: [0, 0, 0],
-  };
+  const mats = React.memo(() => {
+    return {
+      ambient: 0.3,
+      diffuse: 0.7,
+      shininess: 100,
+      // specularColor: [100, 30, 30],
+      specularColor: [0, 0, 0],
+    };
+  });
 
   const demandColorRange = [
     // [25, 176, 6, 100],
@@ -44,6 +47,46 @@ const Map = ({
     [255, 0, 71, 100],
     // [255, 0, 0, 100],
   ];
+
+  const determineDiscrepancy = (d, mode) => {
+    switch (mode) {
+      case "all":
+        return (
+          d[0].demand.food.meat +
+          d[0].demand.food.carbs +
+          d[0].demand.food.vegetables +
+          d[0].demand.food.fruits -
+          (d[0].supply.food.meat +
+            d[0].supply.food.carbs +
+            d[0].supply.food.vegetables +
+            d[0].supply.food.fruits)
+        );
+
+      case "meat":
+        return d[0].demand.food.meat - d[0].supply.food.meat;
+
+      case "carbs":
+        return d[0].demand.food.carbs - d[0].supply.food.carbs;
+
+      case "vegetables":
+        return d[0].demand.food.vegetables - d[0].supply.food.vegetables;
+
+      case "fruits":
+        return d[0].demand.food.fruits - d[0].supply.food.fruits;
+
+      default:
+        return (
+          d[0].demand.food.meat +
+          d[0].demand.food.carbs +
+          d[0].demand.food.vegetables +
+          d[0].demand.food.fruits -
+          (d[0].supply.food.meat +
+            d[0].supply.food.carbs +
+            d[0].supply.food.vegetables +
+            d[0].supply.food.fruits)
+        );
+    }
+  };
 
   const meatDemandHexagonLayer = new HexagonLayer({
     id: "meat-demand-hexagon-layer",
@@ -389,7 +432,7 @@ const Map = ({
   });
 
   const discrepancyLayer = new HexagonLayer({
-    id: "discrepancy-hexagon-layer",
+    id: "all-discrepancy-hexagon-layer",
     data: hexagonLayerData,
     pickable: true,
     extruded: true,
@@ -398,19 +441,7 @@ const Map = ({
     elevationScale: 8,
     // d is just the data in this case
     getPosition: (d) => [parseFloat(d._long), parseFloat(d.lat)],
-    // getElevationWeight:
-    getColorValue: (d) =>
-      d[0].demand.food.meat +
-        d[0].demand.food.carbs +
-        d[0].demand.food.vegetables +
-        d[0].demand.food.fruits -
-        (d[0].supply.food.meat +
-          d[0].supply.food.carbs +
-          d[0].supply.food.vegetables +
-          d[0].supply.food.fruits) <
-      0
-        ? 100
-        : 1,
+    getColorValue: (d) => determineDiscrepancy(d, discrepancyMode),
     // d also stands for Da-click-event here
     onClick: (d) => {
       if (areaOnClick) {
@@ -453,19 +484,10 @@ const Map = ({
       tooltip.current.style.top = `-200px`;
     },
     getElevationValue: (d) =>
-      Math.abs(
-        d[0].demand.food.meat +
-          d[0].demand.food.carbs +
-          d[0].demand.food.vegetables +
-          d[0].demand.food.fruits -
-          (d[0].supply.food.meat +
-            d[0].supply.food.carbs +
-            d[0].supply.food.vegetables +
-            d[0].supply.food.fruits)
-      ),
+      Math.abs(determineDiscrepancy(d, discrepancyMode)),
     colorRange: [
-      [255, 0, 71, 100],
       [0, 255, 0, 100],
+      [255, 0, 71, 100],
     ],
     material: mats,
   });
@@ -517,6 +539,26 @@ const Map = ({
         ]);
         break;
       case "diff":
+        switch (discrepancyMode) {
+          case "all":
+            discrepancyLayer.id = "all-discrepancy-hexagon-layer";
+            break;
+          case "meat":
+            discrepancyLayer.id = "meat-discrepancy-hexagon-layer";
+            break;
+          case "carbs":
+            discrepancyLayer.id = "carbs-discrepancy-hexagon-layer";
+            break;
+          case "vegetables":
+            discrepancyLayer.id = "vegetables-discrepancy-hexagon-layer";
+            break;
+          case "fruits":
+            discrepancyLayer.id = "fruits-discrepancy-hexagon-layer";
+            break;
+          default:
+            discrepancyLayer.id = "all-discrepancy-hexagon-layer";
+            break;
+        }
         setMapLayers([discrepancyLayer]);
         break;
       case "supply":
@@ -543,17 +585,8 @@ const Map = ({
         ]);
         break;
     }
-  }, [displayMode]);
-
-  // const layers = [
-  //   // fruitsSupplyHexagonLayer,
-  //   // vegSupplyHexagonLayer,
-  //   // carbsSupplyHexagonLayer,
-  //   // meatSupplyHexagonLayer,
-  //   farmlandGeoJSONLayer,
-  //   supplyHexagonLayer,
-  //   demandHexagonLayer,
-  // ];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayMode, discrepancyMode]);
 
   return (
     <div className="map-container" onClick={onClick} style={style}>
