@@ -532,11 +532,7 @@ const Map = ({
   React.useEffect(() => {
     switch (displayMode) {
       case "both":
-        setMapLayers([
-          supplyHexagonLayer,
-          demandHexagonLayer,
-          farmlandGeoJSONLayer,
-        ]);
+        setMapLayers([supplyHexagonLayer, demandHexagonLayer]);
         break;
       case "diff":
         switch (discrepancyMode) {
@@ -577,12 +573,11 @@ const Map = ({
           meatDemandHexagonLayer,
         ]);
         break;
+      case "farm":
+        setMapLayers([farmlandGeoJSONLayer]);
+        break;
       default:
-        setMapLayers([
-          supplyHexagonLayer,
-          demandHexagonLayer,
-          farmlandGeoJSONLayer,
-        ]);
+        setMapLayers([supplyHexagonLayer, demandHexagonLayer]);
         break;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

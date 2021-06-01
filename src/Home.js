@@ -227,6 +227,7 @@ function Home() {
               <option value="diff">Discrepancy</option>
               <option value="supply">Supply</option>
               <option value="demand">Demand</option>
+              <option value="farm">Farmland</option>
             </select>
           </li>
           {discrepancyShown ? (
