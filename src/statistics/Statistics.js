@@ -1,6 +1,6 @@
 import React, { Component } from "react";
 import { Bar } from "react-chartjs-2";
-import placeStats from "../GeoFeature.json";
+import placeStats from "../GeoFeatureFinal.json";
 import "./statistics.css";
 
 class Statistics extends Component {

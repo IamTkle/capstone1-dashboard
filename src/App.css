@@ -272,7 +272,7 @@ a {
 .settings-tab:hover {
   position: fixed;
   width: 17em;
-  height: 50vh;
+  height: 65vh;
   opacity: 0.85;
   border-radius: 1em 0em 0em 1em;
 }
@@ -353,4 +353,9 @@ a {
 .settings-tab li.settings-option.sub-option select {
   font-size: 0.75rem;
   margin-left: 2em;
+}
+
+.slider {
+  width: 100%;
+  height: 2rem;
 }

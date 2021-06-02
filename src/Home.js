@@ -6,11 +6,10 @@ import { FaWindowClose } from "react-icons/fa";
 import ReactMap, { FlyToInterpolator, WebMercatorViewport } from "react-map-gl";
 import { NavLink } from "react-router-dom";
 import { ImStatsDots } from "react-icons/im";
-// import { OrthographicView } from "@deck.gl/core";
 import DeckGL from "@deck.gl/react";
 import { HeatmapLayer } from "@deck.gl/aggregation-layers";
 import { ScatterplotLayer } from "@deck.gl/layers";
-import AUPopulationAtLocation from "./GeoFeature.json";
+import WAPopulationAtLocation from "./GeoFeatureFinal.json";
 import { RiSettings5Fill as SettingsIcon } from "react-icons/ri";
 
 function Home() {
@@ -38,15 +37,25 @@ function Home() {
 
   const [dataDisplayMode, setDataDisplayMode] = React.useState("both");
 
-  const hexagonLayerData = AUPopulationAtLocation;
+  const [timeStep, setTimeStep] = React.useState(0);
 
-  const totalPopulation = AUPopulationAtLocation.reduce(
-    (total, current) => (total += current)
-  );
+  const hexagonLayerData = WAPopulationAtLocation;
 
-  const averagePopulation = totalPopulation / AUPopulationAtLocation.length;
+  // const totalPopulation = WAPopulationAtLocation.reduce(
+  //   (total, current) => (total += current)
+  // );
+
+  // const averagePopulation = totalPopulation / WAPopulationAtLocation.length;
 
   const interp = new FlyToInterpolator({ speed: 0.85 });
+
+  const latestYear = new Date().getFullYear();
+
+  const earliestYear = latestYear - (hexagonLayerData[0].simulation.length - 1);
+
+  const yearValueRef = React.useRef();
+
+  const sliderRef = React.useRef();
 
   // area/hexagon the user clicks on the map
   const [chosenArea, setChosenArea] = React.useState({});
@@ -80,17 +89,17 @@ function Home() {
   const handleAreaClick = (area) => {
     setShowAreaStats(true);
     setChosenArea(area);
-    setViewState({
-      longitude: parseFloat(area._long),
+    setViewState((prevViewState) => ({
+      longitude: parseFloat(area.long),
       latitude: parseFloat(area.lat),
       zoom: 13,
       pitch: 40,
-      bearing: viewState.bearing,
+      bearing: prevViewState.bearing,
       // we want the transition duration to be inversely proportional to the
       // zoom i.e if the user's really zoomed in, we want that time to be smaller
-      transitionDuration: 7500 / viewState.zoom,
+      transitionDuration: 7500 / prevViewState.zoom,
       transitionInterpolator: interp,
-    });
+    }));
   };
 
   const handleMinimapSelect = (d) => {
@@ -113,7 +122,13 @@ function Home() {
 
   const handleDiscrepancySelect = (e) => {
     setDiscrepancyMode(e.target.value);
-    console.log(e.target.value);
+  };
+
+  const handleYearChange = (e) => {
+    const currentTimestep = parseInt(e.target.value) - earliestYear;
+    yearValueRef.current.innerHTML = e.target.value;
+    console.log(currentTimestep);
+    setTimeStep(currentTimestep);
   };
 
   const scatterplotForm = new ScatterplotLayer({
@@ -127,22 +142,14 @@ function Home() {
     radiusMinPixels: 3,
     radiusMaxPixels: 5,
     lineWidthMinPixels: 1,
-    getPosition: (d) => [parseFloat(d._long), parseFloat(d.lat)],
-    // getRadius: (d) => d.population,
+    getPosition: (d) => [parseFloat(d.long), parseFloat(d.lat)],
     getFillColor: (d) =>
-      d.demand.food.meat +
-        d.demand.food.carbs +
-        d.demand.food.vegetables +
-        d.demand.food.fruits >=
-      d.supply.food.meat +
-        d.supply.food.carbs +
-        d.supply.food.vegetables +
-        d.supply.food.fruits
-        ? [255, 0, 0]
+      d.demand.meat + d.demand.carbs + d.demand.vegetables + d.demand.fruits >
+      d.supply.meat + d.supply.carbs + d.supply.vegetables + d.supply.fruits
+        ? [255, 0, 71]
         : [0, 255, 0],
     getLineColor: [0, 0, 0, 0],
     onClick: (d) => {
-      console.log(d);
       handleAreaClick(d.object);
     },
     // d.object.points ? setChosenArea(d.object.points[0].source) : null,
@@ -152,7 +159,7 @@ function Home() {
     id: "population-heatmap",
     data: hexagonLayerData,
     radiusPixels: 30,
-    getPosition: (d) => [parseFloat(d._long), parseFloat(d.lat)],
+    getPosition: (d) => [parseFloat(d.long), parseFloat(d.lat)],
     getWeight: (d) => d.population,
     aggregation: "SUM",
     colorRange: [
@@ -188,6 +195,10 @@ function Home() {
         />
 
         {Object.keys(chosenArea).map((stat) => {
+          if (stat === "simulation") {
+            return <li key="sim"></li>;
+          }
+
           if (stat !== "supply" && stat !== "demand") {
             return (
               // logic to display all the key value pairs in the object
@@ -199,10 +210,10 @@ function Home() {
           return (
             <li key={stat}>{`${stat.charAt(0).toUpperCase()}${stat.slice(
               1
-            )} : [Meat: ${chosenArea[stat].food.meat}\nCarbs: ${
-              chosenArea[stat].food.carbs
-            }\nVeg: ${chosenArea[stat].food.vegetables}\nFruits: ${
-              chosenArea[stat].food.fruits
+            )} : [Meat: ${chosenArea[stat].meat}\nCarbs: ${
+              chosenArea[stat].carbs
+            }\nVeg: ${chosenArea[stat].vegetables}\nFruits: ${
+              chosenArea[stat].fruits
             } ]`}</li>
           );
         })}
@@ -251,6 +262,20 @@ function Home() {
               <option>Hide</option>
             </select>
           </li>
+          <li>
+            <label>
+              Year : <span ref={yearValueRef}>2016</span>{" "}
+            </label>
+            <input
+              type="range"
+              ref={sliderRef}
+              className="slider"
+              onChange={handleYearChange}
+              min="2015" //one year below earliest year to different if it's a time step or initial numbers
+              max="2021"
+              defaultValue="2015"
+            />
+          </li>
         </ul>
       </div>
 
@@ -270,6 +295,7 @@ function Home() {
           onViewStateChange={handleViewStateChange}
           displayMode={dataDisplayMode}
           discrepancyMode={discrepancyMode}
+          timeStep={timeStep}
         />
         <div className={showMinimap ? "minimap" : "minimap closed"}>
           <ReactMap

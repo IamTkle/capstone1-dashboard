@@ -2,13 +2,10 @@ import "./mapstyles.css";
 import React from "react";
 import ReactMap from "react-map-gl";
 import DeckGL from "@deck.gl/react";
-import { HexagonLayer } from "@deck.gl/aggregation-layers";
-import { GeoJsonLayer, ScatterplotLayer } from "@deck.gl/layers";
-
-// import AUPopulationAtLocation from "../au-cities-population-location.json";
-import AUPopulationAtLocation from "../GeoFeature.json";
-import FarmlandInfo from "../Farmland.json";
-// import reactDom from "react-dom";
+import { GeoJsonLayer, ColumnLayer } from "@deck.gl/layers";
+import WAPopulationAtLocation from "../GeoFeatureFinal.json";
+import FarmlandInfo from "../FarmlandInfo.json";
+import SA2Info from "../SA2_2011.json";
 
 const Map = ({
   height,
@@ -18,16 +15,19 @@ const Map = ({
   onClick,
   areaOnClick,
   style,
-  displayMode,
-  discrepancyMode,
+  displayMode = "both",
+  discrepancyMode = "all",
+  timeStep = 0,
 }) => {
   const tooltip = React.useRef();
 
-  const hexagonLayerData = AUPopulationAtLocation;
+  const hexagonLayerData = WAPopulationAtLocation;
 
   const geoJSONLayerData = FarmlandInfo;
 
-  // console.log(geoJSONLayerData);
+  const SA2GeoJSONLayerData = SA2Info;
+
+  const ColumnRadius = 200;
 
   // hexagon materials
   const mats = React.memo(() => {
@@ -40,457 +40,101 @@ const Map = ({
     };
   });
 
-  const demandColorRange = [
-    // [25, 176, 6, 100],
-    // [255, 203, 1, 100],
-    // [205, 51, 1, 100],
-    [255, 0, 71, 100],
-    // [255, 0, 0, 100],
-  ];
+  const closeTooltip = () => {
+    tooltip.current.style.opacity = 0.0;
+    tooltip.current.style.left = `-200px`;
+    tooltip.current.style.top = `-200px`;
+  };
+
+  const showTooltip = (hoverEvent) => {
+    tooltip.current.style.opacity = 0.9;
+    tooltip.current.innerHTML = `<h2>${hoverEvent.object.suburb.toUpperCase()}</h2>
+          <p>Population: ${hoverEvent.object.population}<br></p>
+          `;
+    tooltip.current.style.left = `${hoverEvent.x}px`;
+    tooltip.current.style.top = `${hoverEvent.y}px`;
+  };
 
   const determineDiscrepancy = (d, mode) => {
     switch (mode) {
       case "all":
-        return (
-          d[0].demand.food.meat +
-          d[0].demand.food.carbs +
-          d[0].demand.food.vegetables +
-          d[0].demand.food.fruits -
-          (d[0].supply.food.meat +
-            d[0].supply.food.carbs +
-            d[0].supply.food.vegetables +
-            d[0].supply.food.fruits)
-        );
+        return timeStep < 0
+          ? d.demand.meat +
+              d.demand.carbs +
+              d.demand.vegetables +
+              d.demand.fruits -
+              (d.supply.meat +
+                d.supply.carbs +
+                d.supply.vegetables +
+                d.supply.fruits)
+          : d.simulation[timeStep].demand.meat +
+              d.simulation[timeStep].demand.carbs +
+              d.simulation[timeStep].demand.vegetables +
+              d.simulation[timeStep].demand.fruits -
+              (d.simulation[timeStep].supply.meat +
+                d.simulation[timeStep].supply.carbs +
+                d.simulation[timeStep].supply.vegetables +
+                d.simulation[timeStep].supply.fruits);
 
       case "meat":
-        return d[0].demand.food.meat - d[0].supply.food.meat;
+        return timeStep < 0
+          ? d.demand.meat - d.supply.meat
+          : d.simulation[timeStep].demand.meat -
+              d.simulation[timeStep].supply.meat;
 
       case "carbs":
-        return d[0].demand.food.carbs - d[0].supply.food.carbs;
+        return timeStep < 0
+          ? d.demand.carbs - d.supply.carbs
+          : d.simulation[timeStep].demand.carbs -
+              d.simulation[timeStep].supply.carbs;
 
       case "vegetables":
-        return d[0].demand.food.vegetables - d[0].supply.food.vegetables;
+        return timeStep < 0
+          ? d.demand.vegetables - d.supply.vegetables
+          : d.simulation[timeStep].demand.vegetables -
+              d.simulation[timeStep].supply.vegetables;
 
       case "fruits":
-        return d[0].demand.food.fruits - d[0].supply.food.fruits;
+        return timeStep < 0
+          ? d.demand.fruits - d.supply.fruits
+          : d.simulation[timeStep].demand.fruits -
+              d.simulation[timeStep].supply.fruits;
 
       default:
         return (
-          d[0].demand.food.meat +
-          d[0].demand.food.carbs +
-          d[0].demand.food.vegetables +
-          d[0].demand.food.fruits -
-          (d[0].supply.food.meat +
-            d[0].supply.food.carbs +
-            d[0].supply.food.vegetables +
-            d[0].supply.food.fruits)
+          d.demand.meat +
+          d.demand.carbs +
+          d.demand.vegetables +
+          d.demand.fruits -
+          (d.supply.meat +
+            d.supply.carbs +
+            d.supply.vegetables +
+            d.supply.fruits)
         );
     }
   };
 
-  const meatDemandHexagonLayer = new HexagonLayer({
-    id: "meat-demand-hexagon-layer",
-    data: hexagonLayerData,
-    elevationScale: 8,
-    pickable: false,
-    radius: 100,
-    extruded: true,
-    getPosition: (d) => [parseFloat(d._long), parseFloat(d.lat)],
-    getElevationValue: (d) => d[0].demand.food.meat,
-    // colorRange: [[200, 150, 150]],
-    colorRange: [[195, 138, 138]],
-    material: mats,
-  });
+  const meatDemandCol = React.useRef();
 
-  const carbsDemandHexagonLayer = new HexagonLayer({
-    id: "carbs-demand-hexagon-layer",
-    data: hexagonLayerData,
-    elevationScale: 8,
-    pickable: false,
-    radius: 100,
-    extruded: true,
-    getPosition: (d) => [parseFloat(d._long), parseFloat(d.lat)],
-    getElevationValue: (d) => d[0].demand.food.meat + d[0].demand.food.carbs,
-    // colorRange: [[150, 115, 92]],
-    colorRange: [[198, 137, 88]],
-    material: mats,
-  });
+  const carbsDemandCol = React.useRef();
 
-  const vegDemandHexagonLayer = new HexagonLayer({
-    id: "veg-demand-hexagon-layer",
-    data: hexagonLayerData,
-    elevationScale: 8,
-    pickable: false,
-    radius: 100,
-    extruded: true,
-    getPosition: (d) => [parseFloat(d._long), parseFloat(d.lat)],
-    getElevationValue: (d) =>
-      d[0].demand.food.meat +
-      d[0].demand.food.carbs +
-      d[0].demand.food.vegetables,
-    // colorRange: [[133, 203, 51]],
-    colorRange: [[150, 177, 37]],
-    material: mats,
-  });
+  const vegDemandCol = React.useRef();
 
-  const fruitsDemandHexagonLayer = new HexagonLayer({
-    id: "fruits-demand-hexagon-layer",
-    data: hexagonLayerData,
-    elevationScale: 8,
-    pickable: true,
-    radius: 100,
-    extruded: true,
-    // d is just the data in this case
-    getPosition: (d) => [parseFloat(d._long), parseFloat(d.lat)],
-    getElevationValue: (d) =>
-      d[0].demand.food.meat +
-      d[0].demand.food.carbs +
-      d[0].demand.food.vegetables +
-      d[0].demand.food.fruits,
-    colorRange: [[255, 127, 80]],
-    // d also stands for Da-click-event here
-    onClick: (d) => {
-      if (areaOnClick) {
-        if (d.object.points[0].source) {
-          areaOnClick(d.object.points[0].source);
-          tooltip.current.style.opacity = 0.0;
-          tooltip.current.style.left = `-200px`;
-          tooltip.current.style.top = `-200px`;
-        }
-      }
-    },
-    // as you can already extrapolate: Da-hover-event
-    onHover: (d) => {
-      // whenever the user hovers over a hexagon, tool tip shows up with
-      // if and only if the object exists
-      if (d.object) {
-        tooltip.current.style.opacity = 0.9;
-        tooltip.current.innerHTML = `<h2>${d.object.points[0].source.suburb.toUpperCase()}</h2>
-          <p>Population: ${d.object.points[0].source.population}<br></p>
-          `;
-        tooltip.current.style.left = `${d.x}px`;
-        tooltip.current.style.top = `${d.y}px`;
-      } else {
-        tooltip.current.style.opacity = 0.0;
-        tooltip.current.style.left = `-200px`;
-        tooltip.current.style.top = `-200px`;
-      }
-    },
-    onDrag: () => {
-      // There was a "feature" where when you hover a town and
-      // then starts to drag the map, the tooltip would still be
-      // showing but its location on the screen doesn't match the
-      // chosen location anymore, so i just choose to disable it
-      // if the user starts dragging
-      if (tooltip.current.style.opacity === 0.0) {
-        return;
-      }
-      tooltip.current.style.opacity = 0.0;
-      tooltip.current.style.left = `-200px`;
-      tooltip.current.style.top = `-200px`;
-    },
-  });
+  const fruitsDemandCol = React.useRef();
 
-  const meatSupplyHexagonLayer = new HexagonLayer({
-    id: "meat-supply-hexagon-layer",
-    data: hexagonLayerData,
-    elevationScale: 8,
-    pickable: false,
-    radius: 100,
-    extruded: true,
-    getPosition: (d) => [parseFloat(d._long), parseFloat(d.lat)],
-    getElevationValue: (d) => d[0].supply.food.meat,
-    // colorRange: [[200, 150, 150]],
-    colorRange: [[195, 138, 138]],
-    material: mats,
-  });
+  const meatSupplyCol = React.useRef();
 
-  const carbsSupplyHexagonLayer = new HexagonLayer({
-    id: "carbs-supply-hexagon-layer",
-    data: hexagonLayerData,
-    elevationScale: 8,
-    pickable: false,
-    radius: 100,
-    extruded: true,
-    getPosition: (d) => [parseFloat(d._long), parseFloat(d.lat)],
-    getElevationValue: (d) => d[0].supply.food.meat + d[0].supply.food.carbs,
-    // colorRange: [[150, 115, 92]],
-    colorRange: [[198, 137, 88]],
-    material: mats,
-  });
+  const carbsSupplyCol = React.useRef();
 
-  const vegSupplyHexagonLayer = new HexagonLayer({
-    id: "veg-supply-hexagon-layer",
-    data: hexagonLayerData,
-    elevationScale: 8,
-    pickable: false,
-    radius: 100,
-    extruded: true,
-    getPosition: (d) => [parseFloat(d._long), parseFloat(d.lat)],
-    getElevationValue: (d) =>
-      d[0].supply.food.meat +
-      d[0].supply.food.carbs +
-      d[0].supply.food.vegetables,
-    // colorRange: [[133, 203, 51]],
-    colorRange: [[150, 177, 37]],
-    material: mats,
-  });
+  const vegSupplyCol = React.useRef();
 
-  const fruitsSupplyHexagonLayer = new HexagonLayer({
-    id: "fruits-supply-hexagon-layer",
-    data: hexagonLayerData,
-    elevationScale: 8,
-    pickable: true,
-    radius: 100,
-    extruded: true,
-    // d is just the data in this case
-    getPosition: (d) => [parseFloat(d._long), parseFloat(d.lat)],
-    getElevationValue: (d) =>
-      d[0].supply.food.meat +
-      d[0].supply.food.carbs +
-      d[0].supply.food.vegetables +
-      d[0].supply.food.fruits,
-    colorRange: [[255, 127, 80]],
-    // d also stands for Da-click-event here
-    onClick: (d) => {
-      if (areaOnClick) {
-        if (d.object.points[0].source) {
-          areaOnClick(d.object.points[0].source);
-          tooltip.current.style.opacity = 0.0;
-          tooltip.current.style.left = `-200px`;
-          tooltip.current.style.top = `-200px`;
-        }
-      }
-    },
-    // as you can already extrapolate: Da-hover-event
-    onHover: (d) => {
-      // whenever the user hovers over a hexagon, tool tip shows up with
-      // if and only if the object exists
-      if (d.object) {
-        tooltip.current.style.opacity = 0.9;
-        tooltip.current.innerHTML = `<h2>${d.object.points[0].source.suburb.toUpperCase()}</h2>
-          <p>Population: ${d.object.points[0].source.population}<br></p>
-          `;
-        tooltip.current.style.left = `${d.x}px`;
-        tooltip.current.style.top = `${d.y}px`;
-      } else {
-        tooltip.current.style.opacity = 0.0;
-        tooltip.current.style.left = `-200px`;
-        tooltip.current.style.top = `-200px`;
-      }
-    },
-    onDrag: () => {
-      // There was a "feature" where when you hover a town and
-      // then starts to drag the map, the tooltip would still be
-      // showing but its location on the screen doesn't match the
-      // chosen location anymore, so i just choose to disable it
-      // if the user starts dragging
-      if (tooltip.current.style.opacity === 0.0) {
-        return;
-      }
-      tooltip.current.style.opacity = 0.0;
-      tooltip.current.style.left = `-200px`;
-      tooltip.current.style.top = `-200px`;
-    },
-  });
+  const fruitsSupplyCol = React.useRef();
 
-  const supplyHexagonLayer = new HexagonLayer({
-    id: "supply-hexagon-layer",
-    data: hexagonLayerData,
-    pickable: true,
-    extruded: true,
-    radius: 101,
-    // getRadius: 10,
-    elevationScale: 8,
-    // d is just the data in this case
-    getPosition: (d) => [parseFloat(d._long), parseFloat(d.lat)],
-    // getElevationWeight:
-    getColorWeight: (d) => {
-      return Object.keys(d.supply.food).reduce(
-        (total, current) => total + d.supply.food[current],
-        0
-      );
-    },
-    // d also stands for Da-click-event here
-    onClick: (d) => {
-      if (areaOnClick) {
-        if (d.object.points[0].source) {
-          areaOnClick(d.object.points[0].source);
-          tooltip.current.style.opacity = 0.0;
-          tooltip.current.style.left = `-200px`;
-          tooltip.current.style.top = `-200px`;
-        }
-      }
-    },
-    // as you can already extrapolate: Da-hover-event
-    onHover: (d) => {
-      // whenever the user hovers over a hexagon, tool tip shows up with
-      // if and only if the object exists
-      if (d.object) {
-        tooltip.current.style.opacity = 0.9;
-        tooltip.current.innerHTML = `<h2>${d.object.points[0].source.suburb.toUpperCase()}</h2>
-          <p>Population: ${d.object.points[0].source.population}<br></p>
-          `;
-        tooltip.current.style.left = `${d.x}px`;
-        tooltip.current.style.top = `${d.y}px`;
-      } else {
-        tooltip.current.style.opacity = 0.0;
-        tooltip.current.style.left = `-200px`;
-        tooltip.current.style.top = `-200px`;
-      }
-    },
-    onDrag: () => {
-      // There was a "feature" where when you hover a town and
-      // then starts to drag the map, the tooltip would still be
-      // showing but its location on the screen doesn't match the
-      // chosen location anymore, so i just choose to disable it
-      // if the user starts dragging
-      if (tooltip.current.style.opacity === 0.0) {
-        return;
-      }
-      tooltip.current.style.opacity = 0.0;
-      tooltip.current.style.left = `-200px`;
-      tooltip.current.style.top = `-200px`;
-    },
-    getElevationValue: (d) =>
-      d[0].supply.food.meat +
-      d[0].supply.food.carbs +
-      d[0].supply.food.vegetables +
-      d[0].supply.food.fruits,
-    material: mats,
-    colorRange: [[0, 255, 0, 100]],
-  });
+  const totalSupplyCol = React.useRef();
 
-  const demandHexagonLayer = new HexagonLayer({
-    id: "demand-hexagon-layer",
-    data: hexagonLayerData,
-    pickable: true,
-    extruded: true,
-    radius: 101,
-    // getRadius: 10,
-    elevationScale: 8,
-    // d is just the data in this case
-    getPosition: (d) => [parseFloat(d._long), parseFloat(d.lat)],
-    // getElevationWeight:
-    getColorWeight: (d) =>
-      (d.demand.food.meat +
-        d.demand.food.carbs +
-        d.demand.food.vegetables +
-        d.demand.food.fruits) /
-      (d.supply.food.meat +
-        d.supply.food.carbs +
-        d.supply.food.vegetables +
-        d.supply.food.fruits),
-    // d also stands for Da-click-event here
-    onClick: (d) => {
-      if (areaOnClick) {
-        if (d.object.points[0].source) {
-          areaOnClick(d.object.points[0].source);
-          tooltip.current.style.opacity = 0.0;
-          tooltip.current.style.left = `-200px`;
-          tooltip.current.style.top = `-200px`;
-        }
-      }
-    },
-    // as you can already extrapolate: Da-hover-event
-    onHover: (d) => {
-      // whenever the user hovers over a hexagon, tool tip shows up with
-      // if and only if the object exists
-      if (d.object) {
-        tooltip.current.style.opacity = 0.9;
-        tooltip.current.innerHTML = `<h2>${d.object.points[0].source.suburb.toUpperCase()}</h2>
-          <p>Population: ${d.object.points[0].source.population}<br></p>
-          `;
-        tooltip.current.style.left = `${d.x}px`;
-        tooltip.current.style.top = `${d.y}px`;
-      } else {
-        tooltip.current.style.opacity = 0.0;
-        tooltip.current.style.left = `-200px`;
-        tooltip.current.style.top = `-200px`;
-      }
-    },
-    onDrag: () => {
-      // There was a "feature" where when you hover a town and
-      // then starts to drag the map, the tooltip would still be
-      // showing but its location on the screen doesn't match the
-      // chosen location anymore, so i just choose to disable it
-      // if the user starts dragging
-      if (tooltip.current.style.opacity === 0.0) {
-        return;
-      }
-      tooltip.current.style.opacity = 0.0;
-      tooltip.current.style.left = `-200px`;
-      tooltip.current.style.top = `-200px`;
-    },
-    getElevationValue: (d) =>
-      d[0].demand.food.meat +
-      d[0].demand.food.carbs +
-      d[0].demand.food.vegetables +
-      d[0].demand.food.fruits,
-    material: mats,
-    colorRange: demandColorRange,
-  });
+  const totalDemandCol = React.useRef();
 
-  const discrepancyLayer = new HexagonLayer({
-    id: "all-discrepancy-hexagon-layer",
-    data: hexagonLayerData,
-    pickable: true,
-    extruded: true,
-    radius: 101,
-    // getRadius: 10,
-    elevationScale: 8,
-    // d is just the data in this case
-    getPosition: (d) => [parseFloat(d._long), parseFloat(d.lat)],
-    getColorValue: (d) => determineDiscrepancy(d, discrepancyMode),
-    // d also stands for Da-click-event here
-    onClick: (d) => {
-      if (areaOnClick) {
-        if (d.object.points[0].source) {
-          areaOnClick(d.object.points[0].source);
-          tooltip.current.style.opacity = 0.0;
-          tooltip.current.style.left = `-200px`;
-          tooltip.current.style.top = `-200px`;
-        }
-      }
-    },
-    // as you can already extrapolate: Da-hover-event
-    onHover: (d) => {
-      // whenever the user hovers over a hexagon, tool tip shows up with
-      // if and only if the object exists
-      if (d.object) {
-        tooltip.current.style.opacity = 0.9;
-        tooltip.current.innerHTML = `<h2>${d.object.points[0].source.suburb.toUpperCase()}</h2>
-          <p>Population: ${d.object.points[0].source.population}<br></p>
-          `;
-        tooltip.current.style.left = `${d.x}px`;
-        tooltip.current.style.top = `${d.y}px`;
-      } else {
-        tooltip.current.style.opacity = 0.0;
-        tooltip.current.style.left = `-200px`;
-        tooltip.current.style.top = `-200px`;
-      }
-    },
-    onDrag: () => {
-      // There was a "feature" where when you hover a town and
-      // then starts to drag the map, the tooltip would still be
-      // showing but its location on the screen doesn't match the
-      // chosen location anymore, so i just choose to disable it
-      // if the user starts dragging
-      if (tooltip.current.style.opacity === 0.0) {
-        return;
-      }
-      tooltip.current.style.opacity = 0.0;
-      tooltip.current.style.left = `-200px`;
-      tooltip.current.style.top = `-200px`;
-    },
-    getElevationValue: (d) =>
-      Math.abs(determineDiscrepancy(d, discrepancyMode)),
-    colorRange: [
-      [0, 255, 0, 100],
-      [255, 0, 71, 100],
-    ],
-    material: mats,
-  });
+  const discrepancyColLayer = React.useRef();
 
   const farmlandGeoJSONLayer = new GeoJsonLayer({
     id: "geojson-layer",
@@ -519,69 +163,377 @@ const Map = ({
       //   : [100, 100, 100, 200];
     },
     getLineColor: [177, 100, 50],
-    getRadius: 100,
+    getRadius: ColumnRadius,
     getLineWidth: 100,
     getElevation: (object) => object.properties.Area_ha,
     onClick: ({ object }) => console.log(object.properties),
+    autoHighlight: true,
   });
 
-  // let mapLayers = React.useRef([]);
+  const SA2GeoJSONLayer = new GeoJsonLayer({
+    id: "sa2-geojson-layer",
+    data: SA2GeoJSONLayerData,
+    pickable: true,
+    stroked: true,
+    filled: true,
+    extruded: false,
+    getFillColor: [0, 0, 0, 0],
+    lineWidthMinPixels: 0,
+    getLineWidth: 100,
+    getLineColor: [120, 70, 50, 60],
+    autoHighlight: true,
+    highlightColor: [255, 215, 0, 100],
+    onClick: (d) => console.log(d),
+  });
 
   const [mapLayers, setMapLayers] = React.useState([]);
 
   React.useEffect(() => {
     switch (displayMode) {
       case "both":
-        setMapLayers([supplyHexagonLayer, demandHexagonLayer]);
+        totalDemandCol.current = new ColumnLayer({
+          id: "total-dem-column-" + timeStep + "-layer",
+          data: hexagonLayerData,
+          coverage: 0.85,
+          elevationScale: 0.1,
+          diskResolution: 6,
+          radius: ColumnRadius,
+          extruded: true,
+          pickable: true,
+          getPosition: (d) => [parseFloat(d.long), parseFloat(d.lat)],
+          getFillColor: [255, 0, 71, 100],
+          getLineColor: [0, 0, 0],
+          getElevation: (d) =>
+            timeStep < 0
+              ? d.demand.meat +
+                d.demand.carbs +
+                d.demand.vegetables +
+                d.demand.fruits
+              : d.simulation[timeStep].demand.meat +
+                d.simulation[timeStep].demand.carbs +
+                d.simulation[timeStep].demand.vegetables +
+                d.simulation[timeStep].demand.fruits,
+          onClick: (d) => {
+            if (areaOnClick) {
+              if (d.object) {
+                areaOnClick(d.object);
+                closeTooltip();
+              }
+            }
+          },
+          onHover: (d) => {
+            if (d.object) {
+              showTooltip(d);
+            } else {
+              closeTooltip();
+            }
+          },
+        });
+
+        totalSupplyCol.current = new ColumnLayer({
+          id: "total-supply-column-" + timeStep + "-layer",
+          data: hexagonLayerData,
+          coverage: 0.85,
+          elevationScale: 0.1,
+          diskResolution: 6,
+          radius: ColumnRadius,
+          extruded: true,
+          pickable: true,
+          getPosition: (d) => [parseFloat(d.long), parseFloat(d.lat)],
+          getFillColor: [0, 255, 0, 100],
+          getLineColor: [0, 0, 0],
+          getElevation: (d) =>
+            timeStep < 0
+              ? d.supply.meat +
+                d.supply.carbs +
+                d.supply.vegetables +
+                d.supply.fruits
+              : d.simulation[timeStep].supply.meat +
+                d.simulation[timeStep].supply.carbs +
+                d.simulation[timeStep].supply.vegetables +
+                d.simulation[timeStep].supply.fruits,
+          onClick: (d) => {
+            if (areaOnClick) {
+              if (d.object) {
+                areaOnClick(d.object);
+                closeTooltip();
+              }
+            }
+          },
+          onHover: (d) => {
+            if (d.object) {
+              showTooltip(d);
+            } else {
+              closeTooltip();
+            }
+          },
+        });
+
+        setMapLayers([totalSupplyCol.current, totalDemandCol.current]);
         break;
       case "diff":
-        switch (discrepancyMode) {
-          case "all":
-            discrepancyLayer.id = "all-discrepancy-hexagon-layer";
-            break;
-          case "meat":
-            discrepancyLayer.id = "meat-discrepancy-hexagon-layer";
-            break;
-          case "carbs":
-            discrepancyLayer.id = "carbs-discrepancy-hexagon-layer";
-            break;
-          case "vegetables":
-            discrepancyLayer.id = "vegetables-discrepancy-hexagon-layer";
-            break;
-          case "fruits":
-            discrepancyLayer.id = "fruits-discrepancy-hexagon-layer";
-            break;
-          default:
-            discrepancyLayer.id = "all-discrepancy-hexagon-layer";
-            break;
-        }
-        setMapLayers([discrepancyLayer]);
+        discrepancyColLayer.current = new ColumnLayer({
+          id:
+            "discrepancy-column-" + timeStep + "-" + discrepancyMode + "-layer",
+          data: hexagonLayerData,
+          coverage: 0.85,
+          elevationScale: 0.5,
+          diskResolution: 6,
+          radius: ColumnRadius,
+          extruded: true,
+          pickable: true,
+          getPosition: (d) => [parseFloat(d.long), parseFloat(d.lat)],
+          getFillColor: (d) =>
+            determineDiscrepancy(d, discrepancyMode) <= 0
+              ? [0, 255, 0, 100]
+              : [255, 0, 71, 100],
+          getLineColor: [0, 0, 0],
+          getElevation: (d) =>
+            Math.abs(determineDiscrepancy(d, discrepancyMode)),
+          onClick: (d) => {
+            if (areaOnClick) {
+              if (d.object) {
+                areaOnClick(d.object);
+                closeTooltip();
+              }
+            }
+          },
+          onHover: (d) => {
+            if (d.object) {
+              showTooltip(d);
+            } else {
+              closeTooltip();
+            }
+          },
+        });
+
+        setMapLayers([discrepancyColLayer.current]);
         break;
       case "supply":
+        setMapLayers([]);
+
+        meatSupplyCol.current = new ColumnLayer({
+          id: "meat-supply-column-" + timeStep + "-layer",
+          data: hexagonLayerData,
+          elevationScale: 0.1,
+          diskResolution: 6,
+          radius: ColumnRadius,
+          extruded: true,
+          pickable: false,
+          getPosition: (d) => [parseFloat(d.long), parseFloat(d.lat)],
+          getFillColor: [175, 125, 125],
+          getLineColor: [0, 0, 0],
+          getElevation: (d) =>
+            timeStep < 0 ? d.supply.meat : d.simulation[timeStep].supply.meat,
+          material: mats,
+        });
+
+        carbsSupplyCol.current = new ColumnLayer({
+          id: "carbs-supply-column-" + timeStep + "-layer",
+          data: hexagonLayerData,
+          coverage: 0.95,
+          elevationScale: 0.1,
+          diskResolution: 6,
+          radius: ColumnRadius,
+          extruded: true,
+          pickable: false,
+          getPosition: (d) => [parseFloat(d.long), parseFloat(d.lat)],
+          getFillColor: [198, 137, 88],
+          getLineColor: [0, 0, 0],
+          getElevation: (d) =>
+            timeStep < 0
+              ? d.supply.meat + d.supply.carbs
+              : d.simulation[timeStep].supply.meat +
+                d.simulation[timeStep].supply.carbs,
+          material: mats,
+        });
+
+        vegSupplyCol.current = new ColumnLayer({
+          id: "veg-supply-column-" + timeStep + "-layer",
+          data: hexagonLayerData,
+          coverage: 0.9,
+          elevationScale: 0.1,
+          diskResolution: 6,
+          radius: ColumnRadius,
+          extruded: true,
+          pickable: false,
+          getPosition: (d) => [parseFloat(d.long), parseFloat(d.lat)],
+          getFillColor: [150, 177, 37],
+          getLineColor: [0, 0, 0],
+          getElevation: (d) =>
+            timeStep < 0
+              ? d.supply.meat + d.supply.carbs + d.supply.vegetables
+              : d.simulation[timeStep].supply.meat +
+                d.simulation[timeStep].supply.carbs +
+                d.simulation[timeStep].supply.vegetables,
+          material: mats,
+        });
+
+        fruitsSupplyCol.current = new ColumnLayer({
+          id: "fruits-supply-column-" + timeStep + "-layer",
+          data: hexagonLayerData,
+          coverage: 0.85,
+          elevationScale: 0.1,
+          diskResolution: 6,
+          radius: ColumnRadius,
+          extruded: true,
+          pickable: true,
+          getPosition: (d) => [parseFloat(d.long), parseFloat(d.lat)],
+          getFillColor: [255, 127, 80],
+          getLineColor: [0, 0, 0],
+          getElevation: (d) =>
+            timeStep < 0
+              ? d.supply.meat +
+                d.supply.carbs +
+                d.supply.vegetables +
+                d.supply.fruits
+              : d.simulation[timeStep].supply.meat +
+                d.simulation[timeStep].supply.carbs +
+                d.simulation[timeStep].supply.vegetables +
+                d.simulation[timeStep].supply.fruits,
+          onClick: (d) => {
+            if (areaOnClick) {
+              if (d.object) {
+                areaOnClick(d.object);
+                closeTooltip();
+              }
+            }
+          },
+          onHover: (d) => {
+            if (d.object) {
+              showTooltip(d);
+            } else {
+              closeTooltip();
+            }
+          },
+          material: mats,
+        });
+
         setMapLayers([
-          fruitsSupplyHexagonLayer,
-          vegSupplyHexagonLayer,
-          carbsSupplyHexagonLayer,
-          meatSupplyHexagonLayer,
+          fruitsSupplyCol.current,
+          vegSupplyCol.current,
+          carbsSupplyCol.current,
+          meatSupplyCol.current,
         ]);
+        // setMapLayers([
+        //   fruitsSupplyHexagonLayer,
+        //   vegSupplyHexagonLayer,
+        //   carbsSupplyHexagonLayer,
+        //   meatSupplyHexagonLayer,
+        // ]);
         break;
       case "demand":
+        setMapLayers([]);
+        meatDemandCol.current = new ColumnLayer({
+          id: "meat-demand-column-" + timeStep + "-layer",
+          data: hexagonLayerData,
+          elevationScale: 0.1,
+          diskResolution: 6,
+          radius: ColumnRadius,
+          extruded: true,
+          pickable: false,
+          getPosition: (d) => [parseFloat(d.long), parseFloat(d.lat)],
+          getFillColor: [175, 125, 125],
+          getLineColor: [0, 0, 0],
+          getElevation: (d) =>
+            timeStep < 0 ? d.demand.meat : d.simulation[timeStep].demand.meat,
+        });
+
+        carbsDemandCol.current = new ColumnLayer({
+          id: "carbs-dem-column-" + timeStep + "-layer",
+          data: hexagonLayerData,
+          coverage: 0.95,
+          elevationScale: 0.1,
+          diskResolution: 6,
+          radius: ColumnRadius,
+          extruded: true,
+          pickable: false,
+          getPosition: (d) => [parseFloat(d.long), parseFloat(d.lat)],
+          getFillColor: [198, 137, 88],
+          getLineColor: [0, 0, 0],
+          getElevation: (d) =>
+            timeStep < 0
+              ? d.demand.meat + d.demand.carbs
+              : d.simulation[timeStep].demand.meat +
+                d.simulation[timeStep].demand.carbs,
+        });
+
+        vegDemandCol.current = new ColumnLayer({
+          id: "veg-dem-column-" + timeStep + "-layer",
+          data: hexagonLayerData,
+          coverage: 0.9,
+          elevationScale: 0.1,
+          diskResolution: 6,
+          radius: ColumnRadius,
+          extruded: true,
+          pickable: false,
+          getPosition: (d) => [parseFloat(d.long), parseFloat(d.lat)],
+          getFillColor: [150, 177, 37],
+          getLineColor: [0, 0, 0],
+          getElevation: (d) =>
+            timeStep < 0
+              ? d.demand.meat + d.demand.carbs + d.demand.vegetables
+              : d.simulation[timeStep].demand.meat +
+                d.simulation[timeStep].demand.carbs +
+                d.simulation[timeStep].demand.vegetables,
+        });
+
+        fruitsDemandCol.current = new ColumnLayer({
+          id: "fruits-dem-column-" + timeStep + "-layer",
+          data: hexagonLayerData,
+          coverage: 0.85,
+          elevationScale: 0.1,
+          diskResolution: 6,
+          radius: ColumnRadius,
+          extruded: true,
+          pickable: true,
+          getPosition: (d) => [parseFloat(d.long), parseFloat(d.lat)],
+          getFillColor: [255, 127, 80],
+          getLineColor: [0, 0, 0],
+          getElevation: (d) =>
+            timeStep < 0
+              ? d.demand.meat +
+                d.demand.carbs +
+                d.demand.vegetables +
+                d.demand.fruits
+              : d.simulation[timeStep].demand.meat +
+                d.simulation[timeStep].demand.carbs +
+                d.simulation[timeStep].demand.vegetables +
+                d.simulation[timeStep].demand.fruits,
+          onClick: (d) => {
+            if (areaOnClick) {
+              if (d.object) {
+                areaOnClick(d.object);
+                closeTooltip();
+              }
+            }
+          },
+          onHover: (d) => {
+            if (d.object) {
+              showTooltip(d);
+            } else {
+              closeTooltip();
+            }
+          },
+        });
+
         setMapLayers([
-          fruitsDemandHexagonLayer,
-          vegDemandHexagonLayer,
-          carbsDemandHexagonLayer,
-          meatDemandHexagonLayer,
+          fruitsDemandCol.current,
+          vegDemandCol.current,
+          carbsDemandCol.current,
+          meatDemandCol.current,
         ]);
         break;
       case "farm":
         setMapLayers([farmlandGeoJSONLayer]);
         break;
       default:
-        setMapLayers([supplyHexagonLayer, demandHexagonLayer]);
+        setMapLayers([]);
         break;
     }
+    setMapLayers((prevMapLayers) => [...prevMapLayers, SA2GeoJSONLayer]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [displayMode, discrepancyMode]);
+  }, [displayMode, discrepancyMode, timeStep]);
 
   return (
     <div className="map-container" onClick={onClick} style={style}>
@@ -592,7 +544,7 @@ const Map = ({
         height={height}
         viewState={viewState}
         onViewStateChange={onViewStateChange}
-        asyncRender={false}
+        asyncRender={true}
       >
         <DeckGL viewState={viewState} layers={mapLayers} />
       </ReactMap>
