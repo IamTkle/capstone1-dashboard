@@ -3,7 +3,7 @@ import React from "react";
 import ReactMap from "react-map-gl";
 import DeckGL from "@deck.gl/react";
 import { GeoJsonLayer, ColumnLayer } from "@deck.gl/layers";
-import WAPopulationAtLocation from "../GeoFeatureFinal.json";
+import WAPopulationAtLocation from "../GeoFeature.json";
 import FarmlandInfo from "../FarmlandInfo.json";
 import SA2Info from "../SA2_2011.json";
 
@@ -18,6 +18,8 @@ const Map = ({
   displayMode = "both",
   discrepancyMode = "all",
   timeStep = 0,
+  columnElevScale = 0.3,
+  ColumnRadius = 200,
 }) => {
   const tooltip = React.useRef();
 
@@ -27,18 +29,29 @@ const Map = ({
 
   const SA2GeoJSONLayerData = SA2Info;
 
-  const ColumnRadius = 200;
-
   // hexagon materials
   const mats = React.memo(() => {
     return {
-      ambient: 0.3,
-      diffuse: 0.7,
-      shininess: 100,
-      // specularColor: [100, 30, 30],
-      specularColor: [0, 0, 0],
+      ambient: 1,
+      diffuse: 0.5,
+      shininess: 0,
+      specularColor: [50, 50, 50],
     };
   });
+
+  const colorMultiplier = 1;
+
+  const columnOpacity = 180;
+
+  const columnColors = {
+    sugarNFat: [158, 81, 236, columnOpacity].map((x) => x * colorMultiplier),
+    produce: [125, 201, 3, columnOpacity].map((x) => x * colorMultiplier),
+    carbs: [189, 140, 132, columnOpacity].map((x) => x * colorMultiplier),
+    meat: [255, 71, 51, columnOpacity].map((x) => x * colorMultiplier),
+    dairyNEggs: [255, 187, 0, columnOpacity].map((x) => x * colorMultiplier),
+    // other: [51, 145, 240].map((x) => x * colorMultiplier),
+    other: [200, 200, 200, columnOpacity].map((x) => x * colorMultiplier),
+  };
 
   const closeTooltip = () => {
     tooltip.current.style.opacity = 0.0;
@@ -61,20 +74,28 @@ const Map = ({
         return timeStep < 0
           ? d.demand.meat +
               d.demand.carbs +
-              d.demand.vegetables +
-              d.demand.fruits -
+              d.demand.produce +
+              d.demand.sugarNFat +
+              d.demand.dairyNEggs +
+              d.demand.other -
               (d.supply.meat +
                 d.supply.carbs +
-                d.supply.vegetables +
-                d.supply.fruits)
+                d.supply.produce +
+                d.supply.sugarNFat +
+                d.supply.dairyNEggs +
+                d.supply.other)
           : d.simulation[timeStep].demand.meat +
               d.simulation[timeStep].demand.carbs +
-              d.simulation[timeStep].demand.vegetables +
-              d.simulation[timeStep].demand.fruits -
+              d.simulation[timeStep].demand.produce +
+              d.simulation[timeStep].demand.sugarNFat +
+              d.simulation[timeStep].demand.dairyNEggs +
+              d.simulation[timeStep].demand.other -
               (d.simulation[timeStep].supply.meat +
                 d.simulation[timeStep].supply.carbs +
-                d.simulation[timeStep].supply.vegetables +
-                d.simulation[timeStep].supply.fruits);
+                d.simulation[timeStep].supply.produce +
+                d.simulation[timeStep].supply.sugarNFat +
+                d.simulation[timeStep].demand.dairyNEggs +
+                d.simulation[timeStep].demand.other);
 
       case "meat":
         return timeStep < 0
@@ -88,29 +109,32 @@ const Map = ({
           : d.simulation[timeStep].demand.carbs -
               d.simulation[timeStep].supply.carbs;
 
-      case "vegetables":
+      case "produce":
         return timeStep < 0
-          ? d.demand.vegetables - d.supply.vegetables
-          : d.simulation[timeStep].demand.vegetables -
-              d.simulation[timeStep].supply.vegetables;
+          ? d.demand.produce - d.supply.produce
+          : d.simulation[timeStep].demand.produce -
+              d.simulation[timeStep].supply.produce;
 
-      case "fruits":
+      case "sugarNFat":
         return timeStep < 0
-          ? d.demand.fruits - d.supply.fruits
-          : d.simulation[timeStep].demand.fruits -
-              d.simulation[timeStep].supply.fruits;
+          ? d.demand.sugarNFat - d.supply.sugarNFat
+          : d.simulation[timeStep].demand.sugarNFat -
+              d.simulation[timeStep].supply.sugarNFat;
+
+      case "dairyNEggs":
+        return timeStep < 0
+          ? d.demand.dairyNEggs - d.supply.sugarNFat
+          : d.simulation[timeStep].demand.dairyNEggs -
+              d.simulation[timeStep].supply.dairyNEggs;
+
+      case "other":
+        return timeStep < 0
+          ? d.demand.other - d.supply.other
+          : d.simulation[timeStep].demand.other -
+              d.simulation[timeStep].supply.other;
 
       default:
-        return (
-          d.demand.meat +
-          d.demand.carbs +
-          d.demand.vegetables +
-          d.demand.fruits -
-          (d.supply.meat +
-            d.supply.carbs +
-            d.supply.vegetables +
-            d.supply.fruits)
-        );
+        return 0;
     }
   };
 
@@ -118,17 +142,25 @@ const Map = ({
 
   const carbsDemandCol = React.useRef();
 
-  const vegDemandCol = React.useRef();
+  const produceDemandCol = React.useRef();
 
-  const fruitsDemandCol = React.useRef();
+  const sugarNFatDemandCol = React.useRef();
+
+  const dairyNEggsDemandCol = React.useRef();
+
+  const otherDemandCol = React.useRef();
 
   const meatSupplyCol = React.useRef();
 
   const carbsSupplyCol = React.useRef();
 
-  const vegSupplyCol = React.useRef();
+  const produceSupplyCol = React.useRef();
 
-  const fruitsSupplyCol = React.useRef();
+  const sugarNFatSupplyCol = React.useRef();
+
+  const dairyNEggsSupplyCol = React.useRef();
+
+  const otherSupplyCol = React.useRef();
 
   const totalSupplyCol = React.useRef();
 
@@ -183,7 +215,6 @@ const Map = ({
     getLineColor: [120, 70, 50, 60],
     autoHighlight: true,
     highlightColor: [255, 215, 0, 100],
-    onClick: (d) => console.log(d),
   });
 
   const [mapLayers, setMapLayers] = React.useState([]);
@@ -192,27 +223,34 @@ const Map = ({
     switch (displayMode) {
       case "both":
         totalDemandCol.current = new ColumnLayer({
-          id: "total-dem-column-" + timeStep + "-layer",
+          id:
+            "total-dem-column-" +
+            timeStep +
+            "-" +
+            columnElevScale +
+            "-" +
+            ColumnRadius +
+            "-layer",
           data: hexagonLayerData,
-          coverage: 0.85,
-          elevationScale: 0.1,
+          coverage: 0.9,
+          elevationScale: columnElevScale,
           diskResolution: 6,
           radius: ColumnRadius,
           extruded: true,
           pickable: true,
-          getPosition: (d) => [parseFloat(d.long), parseFloat(d.lat)],
+          getPosition: (d) => [parseFloat(d.longitude), parseFloat(d.latitude)],
           getFillColor: [255, 0, 71, 100],
           getLineColor: [0, 0, 0],
           getElevation: (d) =>
             timeStep < 0
               ? d.demand.meat +
                 d.demand.carbs +
-                d.demand.vegetables +
-                d.demand.fruits
+                d.demand.produce +
+                d.demand.sugarNFat
               : d.simulation[timeStep].demand.meat +
                 d.simulation[timeStep].demand.carbs +
-                d.simulation[timeStep].demand.vegetables +
-                d.simulation[timeStep].demand.fruits,
+                d.simulation[timeStep].demand.produce +
+                d.simulation[timeStep].demand.sugarNFat,
           onClick: (d) => {
             if (areaOnClick) {
               if (d.object) {
@@ -231,27 +269,34 @@ const Map = ({
         });
 
         totalSupplyCol.current = new ColumnLayer({
-          id: "total-supply-column-" + timeStep + "-layer",
+          id:
+            "total-supply-column-" +
+            timeStep +
+            "-" +
+            columnElevScale +
+            "-" +
+            ColumnRadius +
+            "-layer",
           data: hexagonLayerData,
           coverage: 0.85,
-          elevationScale: 0.1,
+          elevationScale: columnElevScale,
           diskResolution: 6,
           radius: ColumnRadius,
           extruded: true,
           pickable: true,
-          getPosition: (d) => [parseFloat(d.long), parseFloat(d.lat)],
+          getPosition: (d) => [parseFloat(d.longitude), parseFloat(d.latitude)],
           getFillColor: [0, 255, 0, 100],
           getLineColor: [0, 0, 0],
           getElevation: (d) =>
             timeStep < 0
               ? d.supply.meat +
                 d.supply.carbs +
-                d.supply.vegetables +
-                d.supply.fruits
+                d.supply.produce +
+                d.supply.sugarNFat
               : d.simulation[timeStep].supply.meat +
                 d.simulation[timeStep].supply.carbs +
-                d.simulation[timeStep].supply.vegetables +
-                d.simulation[timeStep].supply.fruits,
+                d.simulation[timeStep].supply.produce +
+                d.simulation[timeStep].supply.sugarNFat,
           onClick: (d) => {
             if (areaOnClick) {
               if (d.object) {
@@ -274,15 +319,21 @@ const Map = ({
       case "diff":
         discrepancyColLayer.current = new ColumnLayer({
           id:
-            "discrepancy-column-" + timeStep + "-" + discrepancyMode + "-layer",
+            "discrepancy-column-" +
+            timeStep +
+            "-" +
+            discrepancyMode +
+            "-" +
+            columnElevScale +
+            "-layer",
           data: hexagonLayerData,
           coverage: 0.85,
-          elevationScale: 0.5,
+          elevationScale: columnElevScale,
           diskResolution: 6,
           radius: ColumnRadius,
           extruded: true,
           pickable: true,
-          getPosition: (d) => [parseFloat(d.long), parseFloat(d.lat)],
+          getPosition: (d) => [parseFloat(d.longitude), parseFloat(d.latitude)],
           getFillColor: (d) =>
             determineDiscrepancy(d, discrepancyMode) <= 0
               ? [0, 255, 0, 100]
@@ -313,15 +364,16 @@ const Map = ({
         setMapLayers([]);
 
         meatSupplyCol.current = new ColumnLayer({
-          id: "meat-supply-column-" + timeStep + "-layer",
+          id:
+            "meat-supply-column-" + timeStep + "-" + columnElevScale + "-layer",
           data: hexagonLayerData,
-          elevationScale: 0.1,
+          elevationScale: columnElevScale,
           diskResolution: 6,
           radius: ColumnRadius,
           extruded: true,
           pickable: false,
-          getPosition: (d) => [parseFloat(d.long), parseFloat(d.lat)],
-          getFillColor: [175, 125, 125],
+          getPosition: (d) => [parseFloat(d.longitude), parseFloat(d.latitude)],
+          getFillColor: columnColors.meat,
           getLineColor: [0, 0, 0],
           getElevation: (d) =>
             timeStep < 0 ? d.supply.meat : d.simulation[timeStep].supply.meat,
@@ -329,16 +381,21 @@ const Map = ({
         });
 
         carbsSupplyCol.current = new ColumnLayer({
-          id: "carbs-supply-column-" + timeStep + "-layer",
+          id:
+            "carbs-supply-column-" +
+            timeStep +
+            "-" +
+            columnElevScale +
+            "-layer",
           data: hexagonLayerData,
-          coverage: 0.95,
-          elevationScale: 0.1,
+          coverage: 0.97,
+          elevationScale: columnElevScale,
           diskResolution: 6,
           radius: ColumnRadius,
           extruded: true,
           pickable: false,
-          getPosition: (d) => [parseFloat(d.long), parseFloat(d.lat)],
-          getFillColor: [198, 137, 88],
+          getPosition: (d) => [parseFloat(d.longitude), parseFloat(d.latitude)],
+          getFillColor: columnColors.carbs,
           getLineColor: [0, 0, 0],
           getElevation: (d) =>
             timeStep < 0
@@ -348,49 +405,129 @@ const Map = ({
           material: mats,
         });
 
-        vegSupplyCol.current = new ColumnLayer({
-          id: "veg-supply-column-" + timeStep + "-layer",
+        produceSupplyCol.current = new ColumnLayer({
+          id:
+            "produce-supply-column-" +
+            timeStep +
+            "-" +
+            columnElevScale +
+            "-layer",
           data: hexagonLayerData,
-          coverage: 0.9,
-          elevationScale: 0.1,
+          coverage: 0.94,
+          elevationScale: columnElevScale,
           diskResolution: 6,
           radius: ColumnRadius,
           extruded: true,
           pickable: false,
-          getPosition: (d) => [parseFloat(d.long), parseFloat(d.lat)],
-          getFillColor: [150, 177, 37],
+          getPosition: (d) => [parseFloat(d.longitude), parseFloat(d.latitude)],
+          getFillColor: columnColors.produce,
           getLineColor: [0, 0, 0],
           getElevation: (d) =>
             timeStep < 0
-              ? d.supply.meat + d.supply.carbs + d.supply.vegetables
+              ? d.supply.meat + d.supply.carbs + d.supply.produce
               : d.simulation[timeStep].supply.meat +
                 d.simulation[timeStep].supply.carbs +
-                d.simulation[timeStep].supply.vegetables,
+                d.simulation[timeStep].supply.produce,
           material: mats,
         });
 
-        fruitsSupplyCol.current = new ColumnLayer({
-          id: "fruits-supply-column-" + timeStep + "-layer",
+        sugarNFatSupplyCol.current = new ColumnLayer({
+          id:
+            "sugarNFat-supply-column-" +
+            timeStep +
+            "-" +
+            columnElevScale +
+            "-layer",
           data: hexagonLayerData,
-          coverage: 0.85,
-          elevationScale: 0.1,
+          coverage: 0.91,
+          elevationScale: columnElevScale,
           diskResolution: 6,
           radius: ColumnRadius,
           extruded: true,
-          pickable: true,
-          getPosition: (d) => [parseFloat(d.long), parseFloat(d.lat)],
-          getFillColor: [255, 127, 80],
+          pickable: false,
+          getPosition: (d) => [parseFloat(d.longitude), parseFloat(d.latitude)],
+          getFillColor: columnColors.sugarNFat,
+          // getFillColor: [160, 80, 155],
           getLineColor: [0, 0, 0],
           getElevation: (d) =>
             timeStep < 0
               ? d.supply.meat +
                 d.supply.carbs +
-                d.supply.vegetables +
-                d.supply.fruits
+                d.supply.produce +
+                d.supply.sugarNFat
               : d.simulation[timeStep].supply.meat +
                 d.simulation[timeStep].supply.carbs +
-                d.simulation[timeStep].supply.vegetables +
-                d.simulation[timeStep].supply.fruits,
+                d.simulation[timeStep].supply.produce +
+                d.simulation[timeStep].supply.sugarNFat,
+          material: mats,
+        });
+
+        dairyNEggsSupplyCol.current = new ColumnLayer({
+          id:
+            "dairyNEggs-supply-column-" +
+            timeStep +
+            "-" +
+            columnElevScale +
+            "-layer",
+          data: hexagonLayerData,
+          coverage: 0.88,
+          elevationScale: columnElevScale,
+          diskResolution: 6,
+          radius: ColumnRadius,
+          extruded: true,
+          pickable: false,
+          getPosition: (d) => [parseFloat(d.longitude), parseFloat(d.latitude)],
+          getFillColor: columnColors.dairyNEggs,
+          // getFillColor: [160, 80, 155],
+          getLineColor: [0, 0, 0],
+          getElevation: (d) =>
+            timeStep < 0
+              ? d.supply.meat +
+                d.supply.carbs +
+                d.supply.produce +
+                d.supply.sugarNFat +
+                d.supply.dairyNEggs
+              : d.simulation[timeStep].supply.meat +
+                d.simulation[timeStep].supply.carbs +
+                d.simulation[timeStep].supply.produce +
+                d.simulation[timeStep].supply.sugarNFat +
+                d.simulation[timeStep].supply.dairyNEggs,
+          material: mats,
+        });
+
+        otherSupplyCol.current = new ColumnLayer({
+          id:
+            "other-supply-column-" +
+            timeStep +
+            "-" +
+            columnElevScale +
+            "-layer",
+          data: hexagonLayerData,
+          coverage: 0.85,
+          elevationScale: columnElevScale,
+          diskResolution: 6,
+          radius: ColumnRadius,
+          extruded: true,
+          pickable: true,
+          getPosition: (d) => [parseFloat(d.longitude), parseFloat(d.latitude)],
+          getFillColor: columnColors.other,
+          // getFillColor: [160, 80, 155],
+          getLineColor: [0, 0, 0],
+          getElevation: (d) =>
+            timeStep < 0
+              ? d.supply.meat +
+                d.supply.carbs +
+                d.supply.produce +
+                d.supply.sugarNFat +
+                d.supply.dairyNEggs +
+                d.supply.other
+              : d.simulation[timeStep].supply.meat +
+                d.simulation[timeStep].supply.carbs +
+                d.simulation[timeStep].supply.produce +
+                d.simulation[timeStep].supply.sugarNFat +
+                d.simulation[timeStep].supply.dairyNEggs +
+                d.simulation[timeStep].supply.other,
+          material: mats,
           onClick: (d) => {
             if (areaOnClick) {
               if (d.object) {
@@ -406,18 +543,19 @@ const Map = ({
               closeTooltip();
             }
           },
-          material: mats,
         });
 
         setMapLayers([
-          fruitsSupplyCol.current,
-          vegSupplyCol.current,
+          otherSupplyCol.current,
+          dairyNEggsSupplyCol.current,
+          sugarNFatSupplyCol.current,
+          produceSupplyCol.current,
           carbsSupplyCol.current,
           meatSupplyCol.current,
         ]);
         // setMapLayers([
-        //   fruitsSupplyHexagonLayer,
-        //   vegSupplyHexagonLayer,
+        //   sugarNFatSupplyHexagonLayer,
+        //   produceSupplyHexagonLayer,
         //   carbsSupplyHexagonLayer,
         //   meatSupplyHexagonLayer,
         // ]);
@@ -427,13 +565,13 @@ const Map = ({
         meatDemandCol.current = new ColumnLayer({
           id: "meat-demand-column-" + timeStep + "-layer",
           data: hexagonLayerData,
-          elevationScale: 0.1,
+          elevationScale: columnElevScale,
           diskResolution: 6,
           radius: ColumnRadius,
           extruded: true,
           pickable: false,
-          getPosition: (d) => [parseFloat(d.long), parseFloat(d.lat)],
-          getFillColor: [175, 125, 125],
+          getPosition: (d) => [parseFloat(d.longitude), parseFloat(d.latitude)],
+          getFillColor: columnColors.meat,
           getLineColor: [0, 0, 0],
           getElevation: (d) =>
             timeStep < 0 ? d.demand.meat : d.simulation[timeStep].demand.meat,
@@ -442,14 +580,14 @@ const Map = ({
         carbsDemandCol.current = new ColumnLayer({
           id: "carbs-dem-column-" + timeStep + "-layer",
           data: hexagonLayerData,
-          coverage: 0.95,
-          elevationScale: 0.1,
+          coverage: 0.97,
+          elevationScale: columnElevScale,
           diskResolution: 6,
           radius: ColumnRadius,
           extruded: true,
           pickable: false,
-          getPosition: (d) => [parseFloat(d.long), parseFloat(d.lat)],
-          getFillColor: [198, 137, 88],
+          getPosition: (d) => [parseFloat(d.longitude), parseFloat(d.latitude)],
+          getFillColor: columnColors.carbs,
           getLineColor: [0, 0, 0],
           getElevation: (d) =>
             timeStep < 0
@@ -458,48 +596,116 @@ const Map = ({
                 d.simulation[timeStep].demand.carbs,
         });
 
-        vegDemandCol.current = new ColumnLayer({
-          id: "veg-dem-column-" + timeStep + "-layer",
+        produceDemandCol.current = new ColumnLayer({
+          id: "produce-dem-column-" + timeStep + "-layer",
           data: hexagonLayerData,
-          coverage: 0.9,
-          elevationScale: 0.1,
+          coverage: 0.94,
+          elevationScale: columnElevScale,
           diskResolution: 6,
           radius: ColumnRadius,
           extruded: true,
           pickable: false,
-          getPosition: (d) => [parseFloat(d.long), parseFloat(d.lat)],
-          getFillColor: [150, 177, 37],
+          getPosition: (d) => [parseFloat(d.longitude), parseFloat(d.latitude)],
+          getFillColor: columnColors.produce,
           getLineColor: [0, 0, 0],
           getElevation: (d) =>
             timeStep < 0
-              ? d.demand.meat + d.demand.carbs + d.demand.vegetables
+              ? d.demand.meat + d.demand.carbs + d.demand.produce
               : d.simulation[timeStep].demand.meat +
                 d.simulation[timeStep].demand.carbs +
-                d.simulation[timeStep].demand.vegetables,
+                d.simulation[timeStep].demand.produce,
         });
 
-        fruitsDemandCol.current = new ColumnLayer({
-          id: "fruits-dem-column-" + timeStep + "-layer",
+        sugarNFatDemandCol.current = new ColumnLayer({
+          id: "sugarNFat-dem-column-" + timeStep + "-layer",
           data: hexagonLayerData,
-          coverage: 0.85,
-          elevationScale: 0.1,
+          coverage: 0.91,
+          elevationScale: columnElevScale,
           diskResolution: 6,
           radius: ColumnRadius,
           extruded: true,
-          pickable: true,
-          getPosition: (d) => [parseFloat(d.long), parseFloat(d.lat)],
-          getFillColor: [255, 127, 80],
+          pickable: false,
+          getPosition: (d) => [parseFloat(d.longitude), parseFloat(d.latitude)],
+          // getFillColor: [255, 127, 80],
+          getFillColor: columnColors.sugarNFat,
           getLineColor: [0, 0, 0],
           getElevation: (d) =>
             timeStep < 0
               ? d.demand.meat +
                 d.demand.carbs +
-                d.demand.vegetables +
-                d.demand.fruits
+                d.demand.produce +
+                d.demand.sugarNFat
               : d.simulation[timeStep].demand.meat +
                 d.simulation[timeStep].demand.carbs +
-                d.simulation[timeStep].demand.vegetables +
-                d.simulation[timeStep].demand.fruits,
+                d.simulation[timeStep].demand.produce +
+                d.simulation[timeStep].demand.sugarNFat,
+        });
+
+        dairyNEggsDemandCol.current = new ColumnLayer({
+          id:
+            "dairyNEggs-demand-column-" +
+            timeStep +
+            "-" +
+            columnElevScale +
+            "-layer",
+          data: hexagonLayerData,
+          coverage: 0.88,
+          elevationScale: columnElevScale,
+          diskResolution: 6,
+          radius: ColumnRadius,
+          extruded: true,
+          pickable: false,
+          getPosition: (d) => [parseFloat(d.longitude), parseFloat(d.latitude)],
+          getFillColor: columnColors.dairyNEggs,
+          // getFillColor: [160, 80, 155],
+          getLineColor: [0, 0, 0],
+          getElevation: (d) =>
+            timeStep < 0
+              ? d.demand.meat +
+                d.demand.carbs +
+                d.demand.produce +
+                d.demand.sugarNFat +
+                d.demand.dairyNEggs
+              : d.simulation[timeStep].demand.meat +
+                d.simulation[timeStep].demand.carbs +
+                d.simulation[timeStep].demand.produce +
+                d.simulation[timeStep].demand.sugarNFat +
+                d.simulation[timeStep].demand.dairyNEggs,
+          material: mats,
+        });
+
+        otherDemandCol.current = new ColumnLayer({
+          id:
+            "other-demand-column-" +
+            timeStep +
+            "-" +
+            columnElevScale +
+            "-layer",
+          data: hexagonLayerData,
+          coverage: 0.85,
+          elevationScale: columnElevScale,
+          diskResolution: 6,
+          radius: ColumnRadius,
+          extruded: true,
+          pickable: true,
+          getPosition: (d) => [parseFloat(d.longitude), parseFloat(d.latitude)],
+          getFillColor: columnColors.other,
+          getLineColor: [0, 0, 0],
+          getElevation: (d) =>
+            timeStep < 0
+              ? d.demand.meat +
+                d.demand.carbs +
+                d.demand.produce +
+                d.demand.sugarNFat +
+                d.demand.dairyNEggs +
+                d.demand.other
+              : d.simulation[timeStep].demand.meat +
+                d.simulation[timeStep].demand.carbs +
+                d.simulation[timeStep].demand.produce +
+                d.simulation[timeStep].demand.sugarNFat +
+                d.simulation[timeStep].demand.dairyNEggs +
+                d.simulation[timeStep].demand.other,
+          material: mats,
           onClick: (d) => {
             if (areaOnClick) {
               if (d.object) {
@@ -518,8 +724,10 @@ const Map = ({
         });
 
         setMapLayers([
-          fruitsDemandCol.current,
-          vegDemandCol.current,
+          otherDemandCol.current,
+          dairyNEggsDemandCol.current,
+          sugarNFatDemandCol.current,
+          produceDemandCol.current,
           carbsDemandCol.current,
           meatDemandCol.current,
         ]);
@@ -533,7 +741,7 @@ const Map = ({
     }
     setMapLayers((prevMapLayers) => [...prevMapLayers, SA2GeoJSONLayer]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [displayMode, discrepancyMode, timeStep]);
+  }, [displayMode, discrepancyMode, timeStep, columnElevScale, ColumnRadius]);
 
   return (
     <div className="map-container" onClick={onClick} style={style}>

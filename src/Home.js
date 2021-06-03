@@ -9,7 +9,7 @@ import { ImStatsDots } from "react-icons/im";
 import DeckGL from "@deck.gl/react";
 import { HeatmapLayer } from "@deck.gl/aggregation-layers";
 import { ScatterplotLayer } from "@deck.gl/layers";
-import WAPopulationAtLocation from "./GeoFeatureFinal.json";
+import WAPopulationAtLocation from "./GeoFeature.json";
 import { RiSettings5Fill as SettingsIcon } from "react-icons/ri";
 
 function Home() {
@@ -39,6 +39,10 @@ function Home() {
 
   const [timeStep, setTimeStep] = React.useState(0);
 
+  const [colScale, setColScale] = React.useState(0.5);
+
+  const [radius, setRadius] = React.useState(200);
+
   const hexagonLayerData = WAPopulationAtLocation;
 
   // const totalPopulation = WAPopulationAtLocation.reduce(
@@ -56,6 +60,14 @@ function Home() {
   const yearValueRef = React.useRef();
 
   const sliderRef = React.useRef();
+
+  const scaleValueRef = React.useRef();
+
+  const scaleSliderRef = React.useRef();
+
+  const radiusValueRef = React.useRef();
+
+  const radiusSliderRef = React.useRef();
 
   // area/hexagon the user clicks on the map
   const [chosenArea, setChosenArea] = React.useState({});
@@ -90,8 +102,8 @@ function Home() {
     setShowAreaStats(true);
     setChosenArea(area);
     setViewState((prevViewState) => ({
-      longitude: parseFloat(area.long),
-      latitude: parseFloat(area.lat),
+      longitude: parseFloat(area.longitude),
+      latitude: parseFloat(area.latitude),
       zoom: 13,
       pitch: 40,
       bearing: prevViewState.bearing,
@@ -127,8 +139,17 @@ function Home() {
   const handleYearChange = (e) => {
     const currentTimestep = parseInt(e.target.value) - earliestYear;
     yearValueRef.current.innerHTML = e.target.value;
-    console.log(currentTimestep);
     setTimeStep(currentTimestep);
+  };
+
+  const handleScaleChange = (e) => {
+    scaleValueRef.current.innerHTML = e.target.value;
+    setColScale(parseFloat(e.target.value));
+  };
+
+  const handleRadiusChange = (e) => {
+    radiusValueRef.current.innerHTML = e.target.value;
+    setRadius(parseInt(e.target.value));
   };
 
   const scatterplotForm = new ScatterplotLayer({
@@ -142,13 +163,12 @@ function Home() {
     radiusMinPixels: 3,
     radiusMaxPixels: 5,
     lineWidthMinPixels: 1,
-    getPosition: (d) => [parseFloat(d.long), parseFloat(d.lat)],
+    getPosition: (d) => [parseFloat(d.longitude), parseFloat(d.latitude)],
     getFillColor: (d) =>
       d.demand.meat + d.demand.carbs + d.demand.vegetables + d.demand.fruits >
       d.supply.meat + d.supply.carbs + d.supply.vegetables + d.supply.fruits
         ? [255, 0, 71]
         : [0, 255, 0],
-    getLineColor: [0, 0, 0, 0],
     onClick: (d) => {
       handleAreaClick(d.object);
     },
@@ -159,7 +179,7 @@ function Home() {
     id: "population-heatmap",
     data: hexagonLayerData,
     radiusPixels: 30,
-    getPosition: (d) => [parseFloat(d.long), parseFloat(d.lat)],
+    getPosition: (d) => [parseFloat(d.longitude), parseFloat(d.latitude)],
     getWeight: (d) => d.population,
     aggregation: "SUM",
     colorRange: [
@@ -183,51 +203,54 @@ function Home() {
   return (
     <>
       {/* we do this instead of the && syntax to enable transitions  */}
-      <ul
-        className={
-          showAreaStats ? "general-stats-tab" : "general-stats-tab closed"
-        }
-      >
-        <FaWindowClose
-          className="close-stats-btn"
-          size={40}
-          onClick={() => setShowAreaStats(false)}
-        />
-
-        {Object.keys(chosenArea).map((stat) => {
-          if (stat === "simulation") {
-            return <li key="sim"></li>;
+      {showAreaStats && (
+        <ul
+          className={
+            showAreaStats ? "general-stats-tab" : "general-stats-tab closed"
           }
+        >
+          <FaWindowClose
+            className="close-stats-btn"
+            size={40}
+            onClick={() => setShowAreaStats(false)}
+          />
+          {Object.keys(chosenArea).map((stat) => {
+            // if (stat === "simulation") {
+            //   return <li key="sim"></li>;
+            // }
 
-          if (stat !== "supply" && stat !== "demand") {
-            return (
-              // logic to display all the key value pairs in the object
-              <li key={stat}>{`${stat.charAt(0).toUpperCase()}${stat.slice(
-                1
-              )} : ${chosenArea[stat]}`}</li>
-            );
-          }
-          return (
-            <li key={stat}>{`${stat.charAt(0).toUpperCase()}${stat.slice(
-              1
-            )} : [Meat: ${chosenArea[stat].meat}\nCarbs: ${
-              chosenArea[stat].carbs
-            }\nVeg: ${chosenArea[stat].vegetables}\nFruits: ${
-              chosenArea[stat].fruits
-            } ]`}</li>
-          );
-        })}
-        <li key="toStatsBtn" className="stats-tab-nav">
-          <NavLink to="/statistics">
-            <ImStatsDots />
-            <span className="nav-label">Show area statistics</span>
-          </NavLink>
-        </li>
-      </ul>
+            if (
+              stat !== "supply" &&
+              stat !== "demand" &&
+              stat !== "simulation"
+            ) {
+              return (
+                // logic to display all the key value pairs in the object
+                <li key={stat}>{`${stat.charAt(0).toUpperCase()}${stat.slice(
+                  1
+                )} : ${chosenArea[stat]}`}</li>
+              );
+            }
+            return;
+            // <li key={stat}>{`${stat.charAt(0).toUpperCase()}${stat.slice(
+            //   1
+            // )} : [Meat: ${chosenArea[stat].meat}\nCarbs: ${
+            //   chosenArea[stat].carbs
+            // }\nVeg: ${chosenArea[stat].vegetables}\nFruits: ${
+            //   chosenArea[stat].fruits
+            // } ]`}</li>
+          })}
+          <li key="toStatsBtn" className="stats-tab-nav">
+            <NavLink to="/statistics">
+              <ImStatsDots />
+              <span className="nav-label">Show area statistics</span>
+            </NavLink>
+          </li>
+        </ul>
+      )}
 
       <div className="settings-tab">
         <div>
-          {/* <span className="settings-option-label">SETTINGS</span> */}
           <SettingsIcon className="settings-wheel" size={40} />
         </div>
         <ul>
@@ -247,9 +270,11 @@ function Home() {
               <select onChange={handleDiscrepancySelect}>
                 <option value="all">Supply + Demand</option>
                 <option value="meat">Meat</option>
-                <option value="carbs">Carbs</option>
-                <option value="vegetables">Vegetables</option>
-                <option value="fruits">Fruits</option>
+                <option value="carbs">Grains</option>
+                <option value="produce">Produce</option>
+                <option value="dairyNEggs">Diary & Eggs</option>
+                <option value="sugarNFat">Sugar & Fat</option>
+                <option value="other">Other</option>
               </select>
             </li>
           ) : (
@@ -276,6 +301,38 @@ function Home() {
               defaultValue="2015"
             />
           </li>
+
+          <li>
+            <label>
+              ElevationScale : <span ref={scaleValueRef}>0.1</span>{" "}
+            </label>
+            <input
+              type="range"
+              ref={scaleSliderRef}
+              className="slider"
+              onChange={handleScaleChange}
+              min="0.1"
+              max="5"
+              step="0.1"
+              defaultValue="0.5"
+            />
+          </li>
+
+          <li>
+            <label>
+              Radius : <span ref={radiusValueRef}>200</span>{" "}
+            </label>
+            <input
+              type="range"
+              ref={radiusSliderRef}
+              className="slider"
+              onChange={handleRadiusChange}
+              min="100"
+              max="500"
+              step="50"
+              defaultValue="200"
+            />
+          </li>
         </ul>
       </div>
 
@@ -296,6 +353,8 @@ function Home() {
           displayMode={dataDisplayMode}
           discrepancyMode={discrepancyMode}
           timeStep={timeStep}
+          columnElevScale={colScale}
+          ColumnRadius={radius}
         />
         <div className={showMinimap ? "minimap" : "minimap closed"}>
           <ReactMap
