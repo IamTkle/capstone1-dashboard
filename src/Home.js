@@ -153,10 +153,10 @@ function Home() {
   };
 
   const scatterplotForm = new ScatterplotLayer({
-    id: "scatterplot-layer",
+    id: "scatterplot-layer-" + timeStep,
     data: hexagonLayerData,
     pickable: true,
-    opacity: 0.1,
+    opacity: 0.2,
     stroked: false,
     filled: true,
     radiusScale: 1,
@@ -164,11 +164,32 @@ function Home() {
     radiusMaxPixels: 5,
     lineWidthMinPixels: 1,
     getPosition: (d) => [parseFloat(d.longitude), parseFloat(d.latitude)],
-    getFillColor: (d) =>
-      d.demand.meat + d.demand.carbs + d.demand.vegetables + d.demand.fruits >
-      d.supply.meat + d.supply.carbs + d.supply.vegetables + d.supply.fruits
+    getFillColor: (d) => {
+      if (timeStep < 0) {
+        return Object.keys(d.demand).reduce(
+          (total, current) => (total += d.demand[current]),
+          0
+        ) -
+          Object.keys(d.supply).reduce(
+            (total, current) => (total += d.supply[current]),
+            0
+          ) >
+          0
+          ? [255, 0, 71]
+          : [0, 255, 0];
+      }
+      return Object.keys(d.simulation[timeStep].demand).reduce(
+        (total, current) => (total += d.simulation[timeStep].demand[current]),
+        0
+      ) -
+        Object.keys(d.simulation[timeStep].supply).reduce(
+          (total, current) => (total += d.simulation[timeStep].supply[current]),
+          0
+        ) >
+        0
         ? [255, 0, 71]
-        : [0, 255, 0],
+        : [0, 255, 0];
+    },
     onClick: (d) => {
       handleAreaClick(d.object);
     },
@@ -176,26 +197,28 @@ function Home() {
   });
 
   const populationHeatmap = new HeatmapLayer({
-    id: "population-heatmap",
+    id: "population-heatmap-",
     data: hexagonLayerData,
-    radiusPixels: 30,
+    pickable: false,
+    opacity: 0.8,
+    radiusPixels: 40,
     getPosition: (d) => [parseFloat(d.longitude), parseFloat(d.latitude)],
-    getWeight: (d) => d.population,
+    getWeight: (d) =>
+      timeStep < 0 ? d.population : d.simulation[timeStep].population,
     aggregation: "SUM",
     colorRange: [
-      [240, 249, 232],
-      [186, 228, 188],
-      [123, 204, 196],
-      [67, 162, 202],
-      [8, 104, 172],
+      // [240, 249, 232],
+      // [186, 228, 188],
+      // [123, 204, 196],
+      // [67, 162, 202],
+      // [8, 104, 172],
+      [242, 240, 247, 100],
+      [218, 218, 235, 125],
+      [188, 189, 220, 150],
+      [158, 154, 200, 175],
+      [117, 107, 177, 200],
+      [84, 39, 143],
     ],
-    // colorRange: [
-    //   [247, 247, 247],
-    //   [204, 204, 204],
-    //   [150, 150, 150],
-    //   [99, 99, 99],
-    //   [37, 37, 37],
-    // ],
   });
 
   const layers = [populationHeatmap, scatterplotForm];
@@ -289,7 +312,7 @@ function Home() {
           </li>
           <li>
             <label>
-              Year : <span ref={yearValueRef}>2016</span>{" "}
+              Year : <span ref={yearValueRef}>2021</span>{" "}
             </label>
             <input
               type="range"
@@ -298,7 +321,7 @@ function Home() {
               onChange={handleYearChange}
               min="2015" //one year below earliest year to different if it's a time step or initial numbers
               max="2021"
-              defaultValue="2015"
+              defaultValue="2021"
             />
           </li>
 
