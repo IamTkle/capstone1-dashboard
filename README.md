@@ -1,4 +1,4 @@
-# Agricultural Dashboard for Deloitte 
+# Agricultural Dashboard for Capstone 1 (w/ Deloitte) 
 
 To run:
 
